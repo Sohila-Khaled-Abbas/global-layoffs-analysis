@@ -167,7 +167,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 Let’s connect:  
 - **LinkedIn**: [linkedin.com/in/sohilakhaledabbas](https://www.linkedin.com/in/sohilakhaledabbas)  
 - **GitHub**: [github.com/Sohila-Khaled-Abbas](https://github.com/Sohila-Khaled-Abbas)
-
-
-
-This version is designed to provide clear instructions and structure for SQL-based analysis. Let me know if you need any modifications!
