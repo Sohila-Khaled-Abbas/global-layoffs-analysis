@@ -1,169 +1,172 @@
+<div align="center">
 
-# Global Layoffs Analysis 📉
+# Global Layoffs Analysis
 
-## Overview
+**A SQL-driven case study exploring workforce reductions across companies, countries, funding stages, and time.**
 
-The **Global Layoffs Analysis** project explores trends in workforce reductions across industries, regions, and funding stages. Using **SQL** for data cleaning and analysis, this project uncovers key drivers of layoffs and offers actionable insights into global layoff trends from raw datasets.
+<a href="https://sohila-khaled-abbas.vercel.app/work/"><strong>Explore this project in my portfolio</strong></a>
+&nbsp;·&nbsp;
+<a href="https://github.com/Sohila-Khaled-Abbas">GitHub profile</a>
 
-This project is structured around two datasets:
-1. **`layoffs-cleaned.csv`**: A cleaned version of the raw data with duplicates removed and columns standardized.
-2. **`layoffs-EDA.csv`**: Enhanced data used for exploratory analysis, including additional calculated fields for detailed insights.
+<br/>
 
----
+[![Stars](https://img.shields.io/github/stars/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge&logo=github)](https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis/stargazers)
+[![Forks](https://img.shields.io/github/forks/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge&logo=git)](https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis/forks)
+[![Last Commit](https://img.shields.io/github/last-commit/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge)](https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis/commits/main)
+[![License](https://img.shields.io/github/license/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge)](LICENSE)
 
-## Project Goals
+![SQL](https://img.shields.io/badge/SQL-MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![Focus](https://img.shields.io/badge/Focus-Data%20Analytics-6C63FF?style=for-the-badge)
+![Data](https://img.shields.io/badge/Data-CSV-2F855A?style=for-the-badge)
 
-1. **Analyze Yearly Trends**:
-   - Track layoffs by year and industry to uncover long-term patterns.
-2. **Explore Geographic Impacts**:
-   - Identify which regions are most affected by layoffs and why.
-3. **Correlate Layoffs with Funding Stages**:
-   - Understand how funding stages influence layoff trends in startups.
-
----
-
-## Features
-
-### 1. Data Cleaning and Transformation
-- **Cleaning Steps**:
-  - Removed duplicates and standardized column values (e.g., industry names, funding stages).
-  - Resolved missing values by replacing or filtering them based on business rules.
-  - Generated the `layoffs-cleaned.csv` dataset for consistent analysis.
-
-### 2. SQL-Based Exploratory Analysis
-- Used SQL to:
-  - Aggregate layoffs by year, industry, and geographic regions.
-  - Analyze funding stage correlations with layoffs.
-  - Identify trends across regions and industries.
-
-### 3. Exploratory Data Analysis (EDA)
-- Created the `layoffs-EDA.csv` dataset with additional derived metrics, including:
-  - Percentage of layoffs by funding stage.
-  - Average layoffs per industry per year.
+</div>
 
 ---
 
-## Repository Contents
+## Project overview
 
-| File/Folder Name            | Description                                                                 |
-|-----------------------------|-----------------------------------------------------------------------------|
-| `data/layoffs-cleaned.csv`  | Cleaned dataset for reliable analysis.                                      |
-| `data/layoffs-EDA.csv`      | Enhanced dataset with additional calculated fields for EDA.                 |
-| `sql/`                      | SQL scripts for data cleaning and exploratory analysis.                     |
-| `README.md`                 | Project overview and detailed instructions.                                |
-| `LICENSE`                   | License for the project.                                                   |
+This project uses SQL to prepare and explore a global layoffs dataset. It follows the analytical workflow from staging and data-quality checks to exploratory queries that examine reported layoffs at company, country, funding-stage, and time-series levels.
 
----
+The goal is to turn a raw table into a more consistent analytical dataset, then use aggregations and window functions to surface patterns that are useful for workforce and business analysis.
 
-## SQL Scripts
+| Project area | What is included |
+|---|---|
+| **Data preparation** | Staging tables, duplicate detection, text standardization, date conversion, and missing-value review |
+| **Exploratory analysis** | Company and country totals, funding-stage comparisons, monthly trends, and rolling totals |
+| **Ranking analysis** | Top companies by reported layoffs within each year |
+| **Data artifacts** | A cleaned CSV extract and a company/year ranking extract |
 
-### **1. Yearly Layoff Trends**
-Query to calculate layoffs by year and industry:
-```sql
-SELECT 
-    Year, 
-    Industry, 
-    SUM(NumberOfLayoffs) AS TotalLayoffs
-FROM 
-    Layoffs
-GROUP BY 
-    Year, Industry
-ORDER BY 
-    Year ASC, TotalLayoffs DESC;
+## Analytical workflow
+
+The SQL scripts are organized as a preparation stage followed by exploratory analysis.
+
+```mermaid
+flowchart LR
+    A["Source SQL table<br/>layoffs"] --> B["Create staging copy"]
+    B --> C["Detect and remove duplicates"]
+    C --> D["Standardize values and dates"]
+    D --> E["Review incomplete records"]
+    E --> F["Clean staging table<br/>layoffs_staging2"]
+    F --> G["Exploratory SQL analysis"]
+    G --> H["Trend, comparison and ranking outputs"]
+    H --> I["CSV analysis extracts"]
 ```
 
-### **2. Funding Stage Analysis**
-Query to analyze layoffs by funding stage:
-```sql
-SELECT 
-    FundingStage, 
-    COUNT(Company) AS CompaniesAffected, 
-    SUM(NumberOfLayoffs) AS TotalLayoffs
-FROM 
-    Layoffs
-GROUP BY 
-    FundingStage
-ORDER BY 
-    TotalLayoffs DESC;
+### Analysis map
+
+The exploratory queries investigate several complementary views of the same dataset.
+
+```mermaid
+flowchart TB
+    A["Cleaned staging table"] --> B["Company analysis"]
+    A --> C["Country analysis"]
+    A --> D["Funding-stage analysis"]
+    A --> E["Time-series analysis"]
+
+    B --> B1["Total layoffs by company"]
+    B --> B2["Top companies per year"]
+    C --> C1["Total layoffs by country"]
+    D --> D1["Total layoffs by funding stage"]
+    E --> E1["Monthly layoffs"]
+    E --> E2["Cumulative rolling total"]
 ```
 
-### **3. Regional Analysis**
-Query to identify layoff trends by region:
-```sql
-SELECT 
-    Region, 
-    Year, 
-    SUM(NumberOfLayoffs) AS TotalLayoffs
-FROM 
-    Layoffs
-GROUP BY 
-    Region, Year
-ORDER BY 
-    Year ASC, TotalLayoffs DESC;
+## Data preparation
+
+The cleaning script works with a MySQL table named `layoffs` and creates staging tables so that transformations can be performed without changing the initial source table.
+
+The preparation workflow includes:
+
+1. **Staging:** create a copy of the source table for cleaning.
+2. **Duplicate review:** use `ROW_NUMBER()` with business-field partitions to identify duplicate records.
+3. **Standardization:** trim company names and normalize selected location and country values.
+4. **Date handling:** parse date strings with `STR_TO_DATE()` and convert the staging column to a date type.
+5. **Missing-value review:** inspect incomplete records and remove rows where both layoff measures are missing.
+
+> **Reproducibility note:** The original source file/database dump is not included. Load the source data into a MySQL table named `layoffs` before using the cleaning script. It also contains dataset-specific correction statements; review and validate the SQL in your own MySQL environment before running the script end-to-end. In particular, the missing-industry join/update block needs completion.
+
+## Exploratory analysis
+
+The EDA script uses aggregation, common table expressions (CTEs), and window functions to investigate:
+
+- **Company impact:** total reported layoffs by company.
+- **Geographic distribution:** reported layoffs by country.
+- **Funding stage:** total layoffs grouped by funding stage.
+- **Time trends:** monthly layoffs and cumulative rolling totals.
+- **Annual ranking:** the top companies by layoffs for each year, using `DENSE_RANK()`.
+- **Full workforce reductions:** records where the reported layoff percentage is 100%.
+
+### Annual ranking snapshot
+
+The committed `layoffs-EDA.csv` extract contains the leading company by reported layoffs in each year shown below.
+
+| Year | Top-ranked company | Reported layoffs |
+|---:|---|---:|
+| 2020 | Uber | 15,050 |
+| 2021 | Bytedance | 7,200 |
+| 2022 | Meta | 22,000 |
+| 2023 | Google | 24,000 |
+
+*These figures come from the repository's annual company-ranking extract. They are company-level ranking values, not total layoffs across the entire year. The extract retains ties at the fifth rank, so some years contain more than five rows.*
+
+## Repository structure
+
+```text
+global-layoffs-analysis/
+├── data/
+│   ├── layoffs-cleaned.csv
+│   └── layoffs-EDA.csv
+├── sql/
+│   ├── Data Cleaning.sql
+│   └── Exploratory Data Analysis.sql
+├── LICENSE
+└── README.md
 ```
 
----
+| Asset | Description |
+|---|---|
+| [`data/layoffs-cleaned.csv`](data/layoffs-cleaned.csv) | Prepared dataset extract with company, location, industry, layoff measures, date, funding stage, country, and funds raised |
+| [`data/layoffs-EDA.csv`](data/layoffs-EDA.csv) | Annual company ranking output with company, year, total layoffs, and rank |
+| [`sql/Data Cleaning.sql`](sql/Data%20Cleaning.sql) | Staging, duplicate handling, standardization, date conversion, and missing-value checks |
+| [`sql/Exploratory Data Analysis.sql`](sql/Exploratory%20Data%20Analysis.sql) | Aggregation, time-series analysis, rolling totals, and annual rankings |
 
-## How to Use This Repository
+## SQL techniques demonstrated
 
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis.git
-   ```
+| Technique | How it is used |
+|---|---|
+| `CREATE TABLE ... LIKE` | Build staging tables based on the source structure |
+| `ROW_NUMBER() OVER (...)` | Identify duplicate records |
+| CTEs (`WITH`) | Structure multi-step analysis queries |
+| `TRIM()` and string functions | Standardize text values |
+| `STR_TO_DATE()` | Convert text dates into SQL dates |
+| `GROUP BY` and aggregate functions | Compare layoffs across business dimensions |
+| `SUM() OVER (...)` | Calculate cumulative monthly totals |
+| `DENSE_RANK()` | Rank companies within each year |
 
-2. **Load the Data**:
-   - Use `data/layoffs-cleaned.csv` for SQL-based analysis.
-   - Use `data/layoffs-EDA.csv` for detailed exploratory analysis.
+## Explore the project
 
-3. **Run SQL Queries**:
-   - Navigate to the `sql/` folder and use the provided scripts for analysis:
-     - `layoffs-by-year.sql`
-     - `funding-stage-analysis.sql`
-     - `geographic-trends.sql`
+- **[View the SQL data-cleaning script](sql/Data%20Cleaning.sql)**
+- **[View the exploratory analysis script](sql/Exploratory%20Data%20Analysis.sql)**
+- **[Browse the prepared data](data/)**
+- **[View the project in my portfolio](https://sohila-khaled-abbas.vercel.app/work/)**
 
-4. **Perform EDA**:
-   - Use `layoffs-EDA.csv` to explore trends in Python, Power BI, or other analytics tools.
+## Scope and possible extensions
 
----
+The current repository focuses on SQL-based data preparation and exploratory analysis. It does not currently include the original raw-data download, an automated refresh pipeline, or a Power BI/Tableau dashboard.
 
-## Key Insights and Findings
-
-### 1. Industries Most Affected
-- **Top Impacted**: Technology and Retail faced the highest layoffs globally.
-- **Least Affected**: Healthcare and Education remained relatively stable.
-
-### 2. Geographic Trends
-- **North America**: Largest layoffs due to a dense startup ecosystem.
-- **Europe**: Layoffs primarily impacted the manufacturing sector.
-
-### 3. Funding Stage Correlations
-- **Seed and Series A**: Higher frequency of layoffs during funding challenges.
-- **Late-Stage Startups (Series D+)**: Fewer but more significant layoffs.
+Potential next steps include adding a reproducible database setup, strengthening data-quality validation, and building an interactive dashboard on top of the prepared dataset.
 
 ---
 
-## Future Enhancements
+## About
 
-1. **Real-Time Data**:
-   - Incorporate live layoff data via APIs for continuous updates.
+**Sohila Khaled Abbas**  
+Data Analyst · BI Developer · Analytics Engineer
 
-2. **Predictive Modeling**:
-   - Build machine learning models to forecast layoffs based on funding stage and industry trends.
+I build analytical solutions that connect data preparation, SQL, and business-focused insights.
 
-3. **Interactive Dashboards**:
-   - Create Power BI/Tableau dashboards for advanced exploration of layoff trends.
+[Portfolio](https://sohila-khaled-abbas.vercel.app/work/) · [GitHub](https://github.com/Sohila-Khaled-Abbas) · [LinkedIn](https://www.linkedin.com/in/sohilakabbas/)
 
 ---
 
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
----
-
-## About Me
-
-👋 I’m **Sohila Khaled Galal Abbas**, a passionate data analyst specializing in **SQL** and **data analytics**.  
-Let’s connect:  
-- **LinkedIn**: [linkedin.com/in/sohilakhaledabbas](https://www.linkedin.com/in/sohilakhaledabbas)  
-- **GitHub**: [github.com/Sohila-Khaled-Abbas](https://github.com/Sohila-Khaled-Abbas)
+**License:** This project is available under the [MIT License](LICENSE).
