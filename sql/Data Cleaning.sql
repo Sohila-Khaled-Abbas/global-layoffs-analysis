@@ -1,227 +1,154 @@
--- Data Cleaning
+-- Data Cleaning · MySQL 8.0+
+-- Source: layoffs_source (created by sql/00_Load_Source_Data.sql)
+-- Output: layoffs_staging2
+--
+-- The source table is preserved. This script recreates only the derived
+-- staging tables, so it can be rerun after reloading the source extract.
 
+DROP TABLE IF EXISTS
+    layoffs_staging2,
+    layoffs_staging_normalized,
+    layoffs_staging;
 
+-- 1. Preserve the imported source in a working staging table.
+CREATE TABLE layoffs_staging LIKE layoffs_source;
+
+INSERT INTO layoffs_staging
 SELECT *
-FROM layoffs;
+FROM layoffs_source;
 
--- 1. Remove Duplicates
--- 2. Strandardize
--- 3. Null values or blank values
--- 4. Remove Any Columns or Rows
-
-
-
-CREATE TABLE layoffs_staging
-LIKE layoffs;
-
-
-SELECT *
+-- 2. Normalize text, numeric fields, and date values before deduplication.
+CREATE TABLE layoffs_staging_normalized AS
+SELECT
+    NULLIF(TRIM(company), '') AS company,
+    NULLIF(TRIM(location), '') AS location,
+    NULLIF(TRIM(industry), '') AS industry,
+    total_laid_off,
+    percentage_laid_off,
+    CASE
+        WHEN TRIM(`date`) REGEXP '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$'
+            THEN STR_TO_DATE(TRIM(`date`), '%c/%e/%Y')
+        WHEN TRIM(`date`) REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+            THEN STR_TO_DATE(TRIM(`date`), '%Y-%m-%d')
+        ELSE NULL
+    END AS `date`,
+    NULLIF(TRIM(stage), '') AS stage,
+    NULLIF(TRIM(country), '') AS country,
+    funds_raised_millions
 FROM layoffs_staging;
 
-INSERT layoffs_staging
-SELECT *
-FROM layoffs;
-
-
-SELECT 
-    *, 
-    ROW_NUMBER() OVER (PARTITION BY company, industry, total_laid_off, percentage_laid_off, date ORDER BY date) AS row_num
-FROM layoffs_staging;
-
-WITH duplicate_cte AS
-(
-SELECT 
-    *, 
-    ROW_NUMBER() OVER (PARTITION BY company, location,
-    industry, total_laid_off, percentage_laid_off, date ORDER BY date, stage
-    , country, funds_raised_millions) AS row_num
-FROM layoffs_staging
-)
-SELECT *
-FROM duplicate_cte
-WHERE row_num > 1;
-
-
-SELECT *
-FROM layoffs_staging
-WHERE company = 'Casper';
-
-
-WITH duplicate_cte AS
-(
-SELECT 
-    *, 
-    ROW_NUMBER() OVER (PARTITION BY company, location,
-    industry, total_laid_off, percentage_laid_off, date ORDER BY date, stage
-    , country, funds_raised_millions) AS row_num
-FROM layoffs_staging
-)
-SELECT *
-FROM duplicate_cte
-WHERE row_num > 1;
-
-CREATE TABLE `layoffs_staging2` (
-   `company` TEXT,
-   `location` TEXT,
-   `industry` TEXT,
-   `total_laid_off` INT DEFAULT NULL,
-   `percentage_laid_off` TEXT,
-   `date` TEXT,
-   `stage` TEXT,
-   `country` TEXT,
-   `funds_raised_millions` INT DEFAULT NULL,
-   `row_num` INT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-SELECT *
-FROM layoffs_staging2
-WHERE row_num > 1;
-
-
-
-INSERT INTO layoffs_staging2
-SELECT *,
- ROW_NUMBER() OVER (PARTITION BY company, location,
-    industry, total_laid_off, percentage_laid_off, date ORDER BY date, stage
-    , country, funds_raised_millions) AS row_num
-FROM layoffs_staging;
-
-
-
-SET SQL_SAFE_UPDATES = 0;
-
-DELETE
-FROM layoffs_staging2
-WHERE row_num > 1;
-
-SELECT *
-FROM layoffs_staging2;
-
--- Standardizing data
-
-SELECT company, TRIM(company)
-FROM layoffs_staging2;
-
-
-UPDATE layoffs_staging2
-SET company = TRIM(company)
-WHERE company IS NOT NULL;
-
-SELECT DISTINCT industry
-FROM layoffs_staging2
-;
-
-UPDATE layoffs_staging2
+-- 3. Harmonize only the crypto industry labels that are present in this
+--    repository's extract: "Crypto Currency" and "CryptoCurrency".
+--    Blank or missing industries are NOT assumed to be Crypto.
+UPDATE layoffs_staging_normalized
 SET industry = 'Crypto'
-WHERE industry LIKE '' ;
+WHERE LOWER(REPLACE(TRIM(industry), ' ', '')) = 'cryptocurrency';
 
-SELECT DISTINCT country, TRIM(TRAILING '.' FROM country)
+-- Standardize trailing punctuation in country labels without changing
+-- unrelated country names.
+UPDATE layoffs_staging_normalized
+SET country = TRIM(TRAILING '.' FROM TRIM(country))
+WHERE country IS NOT NULL;
+
+-- 4. Fill an unknown company industry only when every known record for that
+--    company agrees on exactly one non-null industry. Conflicting companies
+--    remain NULL for review instead of receiving an arbitrary value.
+UPDATE layoffs_staging_normalized AS target
+JOIN (
+    SELECT
+        company,
+        MIN(industry) AS resolved_industry
+    FROM layoffs_staging_normalized
+    WHERE industry IS NOT NULL
+    GROUP BY company
+    HAVING COUNT(DISTINCT industry) = 1
+) AS resolved
+    ON resolved.company = target.company
+SET target.industry = resolved.resolved_industry
+WHERE target.industry IS NULL;
+
+-- 5. Remove repeated business records using the same identifying fields
+--    throughout the project. When duplicates differ in secondary metadata,
+--    retain a deterministic row ordered by stage, country, and funding.
+--    Records with both layoff measures missing are excluded from the final
+--    analytical table; records with either measure available are retained.
+CREATE TABLE layoffs_staging2 AS
+SELECT
+    ranked.company,
+    ranked.location,
+    ranked.industry,
+    ranked.total_laid_off,
+    ranked.percentage_laid_off,
+    ranked.`date`,
+    ranked.stage,
+    ranked.country,
+    ranked.funds_raised_millions
+FROM (
+    SELECT
+        normalized.*,
+        ROW_NUMBER() OVER (
+            PARTITION BY
+                company,
+                location,
+                industry,
+                total_laid_off,
+                percentage_laid_off,
+                `date`
+            ORDER BY
+                stage,
+                country,
+                funds_raised_millions
+        ) AS row_num
+    FROM layoffs_staging_normalized AS normalized
+) AS ranked
+WHERE ranked.row_num = 1
+  AND (
+      ranked.total_laid_off IS NOT NULL
+      OR ranked.percentage_laid_off IS NOT NULL
+  );
+
+-- 6. Quality checks
+SELECT
+    (SELECT COUNT(*) FROM layoffs_source) AS source_rows,
+    (SELECT COUNT(*) FROM layoffs_staging2) AS cleaned_rows,
+    (SELECT COUNT(*) FROM layoffs_staging2
+        WHERE industry IS NULL) AS unresolved_industry_rows,
+    (SELECT COUNT(*) FROM layoffs_staging2
+        WHERE `date` IS NULL) AS rows_without_valid_date;
+
+-- The following query should return zero rows if the selected business key
+-- is unique after deduplication.
+SELECT
+    company,
+    location,
+    industry,
+    total_laid_off,
+    percentage_laid_off,
+    `date`,
+    COUNT(*) AS duplicate_count
 FROM layoffs_staging2
-ORDER BY 1;
+GROUP BY
+    company,
+    location,
+    industry,
+    total_laid_off,
+    percentage_laid_off,
+    `date`
+HAVING COUNT(*) > 1;
 
-UPDATE layoffs_staging2
-SET country = TRIM(TRAILING '.' FROM country)
-WHERE country LIKE 'United States%';
-
-SELECT `date`,
-STR_TO_DATE(`date`, '%m/%d/%Y')
-FROM layoffs_staging2;
-
-
-UPDATE layoffs_staging2
-SET `date` = STR_TO_DATE(`date`, '%m/%d/%Y');
-
-ALTER TABLE layoffs_staging2 
-MODIFY COLUMN `date` DATE;
-
-SELECT *
-FROM layoffs_staging2
-WHERE total_laid_off IS NULL
-AND percentage_laid_off IS NULL;
-
-SELECT *
+-- Review unresolved industries without deleting their records.
+SELECT
+    company,
+    location,
+    country,
+    `date`
 FROM layoffs_staging2
 WHERE industry IS NULL
-OR industry = '';
+ORDER BY company, `date`;
 
+-- Review rows with only one of the two layoff measures available.
 SELECT *
 FROM layoffs_staging2
-WHERE company = 'Airbnb';
-
-
-SELECT location
-FROM layoffs_staging2;
-
-SELECT DISTINCT location, country
-FROM layoffs_staging2;
-
-SELECT *
-FROM layoffs_staging2
-WHERE location LIKE 'Mal%'; 
-
-UPDATE layoffs_staging2
-SET location = 'Malmo'
-WHERE location LIKE 'Mal%';
-
-SELECT *
-FROM layoffs_staging2
-WHERE location LIKE 'Flor%';
-
-UPDATE layoffs_staging2
-SET location = 'Florianopolis'
-WHERE location LIKE 'Flor%';
-
-SELECT *
-FROM layoffs_staging2
-WHERE location LIKE '%sseldorf'; 
-
-UPDATE layoffs_staging2
-SET location = 'Dusseldorf'
-WHERE location LIKE '%sseldorf';
-
-SELECT t1 industry, t2 industry
-FROM layoffs_staging2 t1
-JOIN layoffs_staging2 t2
-     ON t1.company = t2.company
-WHERE (t1.industry IS NULL OR t1.industry = '')
-AND t2.industry IS NULL;
-
-UPDATE 
-JOIN layoffs_staging2 t2
-     ON t1.company = t2.company
-SET t1.industry = t2.industry
-WHERE t1.industry IS NULL 
-AND t2.industry IS NULL;
-
-UPDATE layoffs_staging2
-SET industry = NULL
-WHERE industry = '';
-
-DELETE FROM layoffs_staging2
-WHERE company = 'Airbnb' AND industry IS NULL;
-
-SELECT * FROM layoffs_staging2
-WHERE company = 'Airbnb';
-
-DELETE FROM layoffs_staging2
-WHERE company = 'Airbnb' AND percentage_laid_off IS NULL;
-
-SELECT * 
-FROM layoffs_staging2
-WHERE company LIKE 'Bally%';
-
-SELECT * 
-FROM layoffs_staging2 
 WHERE total_laid_off IS NULL
-AND percentage_laid_off IS NULL;
-
-DELETE
-FROM layoffs_staging2 
-WHERE total_laid_off IS NULL
-AND percentage_laid_off IS NULL;
-
-SELECT * 
-FROM layoffs_staging2;
-
-ALTER TABLE layoffs_staging2
-DROP COLUMN row_num;
+   OR percentage_laid_off IS NULL
+ORDER BY `date`, company;
