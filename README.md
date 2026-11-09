@@ -2,7 +2,7 @@
 
 # Global Layoffs Analysis
 
-**A SQL-driven case study exploring workforce reductions across companies, countries, funding stages, and time.**
+**A MySQL analytics case study exploring workforce reductions across companies, industries, countries, funding stages, and time.**
 
 <a href="https://sohila-khaled-abbas.vercel.app/work/"><strong>Explore this project in my portfolio</strong></a>
 &nbsp;·&nbsp;
@@ -15,8 +15,8 @@
 [![Last Commit](https://img.shields.io/github/last-commit/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge)](https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis/commits/main)
 [![License](https://img.shields.io/github/license/Sohila-Khaled-Abbas/global-layoffs-analysis?style=for-the-badge)](LICENSE)
 
-![SQL](https://img.shields.io/badge/SQL-MySQL-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
-![Focus](https://img.shields.io/badge/Focus-Data%20Analytics-6C63FF?style=for-the-badge)
+![MySQL](https://img.shields.io/badge/MySQL-8.0%2B-4479A1?style=for-the-badge&logo=mysql&logoColor=white)
+![SQL](https://img.shields.io/badge/SQL-Data%20Cleaning%20%26%20EDA-6C63FF?style=for-the-badge)
 ![Data](https://img.shields.io/badge/Data-CSV-2F855A?style=for-the-badge)
 
 </div>
@@ -25,80 +25,74 @@
 
 ## Project overview
 
-This project uses SQL to prepare and explore a global layoffs dataset. It follows the analytical workflow from staging and data-quality checks to exploratory queries that examine reported layoffs at company, country, funding-stage, and time-series levels.
+This project uses SQL to prepare and analyze a global layoffs dataset. It follows a reproducible workflow from importing the repository's CSV snapshot into MySQL, through duplicate handling and data standardization, to exploratory queries that examine company, country, industry, funding-stage, and time-series patterns.
 
-The goal is to turn a raw table into a more consistent analytical dataset, then use aggregations and window functions to surface patterns that are useful for workforce and business analysis.
+The analysis demonstrates practical SQL techniques including staging tables, window functions, safe data standardization, common table expressions (CTEs), aggregations, and annual ranking.
 
-| Project area | What is included |
-|---|---|
-| **Data preparation** | Staging tables, duplicate detection, text standardization, date conversion, and missing-value review |
-| **Exploratory analysis** | Company and country totals, funding-stage comparisons, monthly trends, and rolling totals |
-| **Ranking analysis** | Top companies by reported layoffs within each year |
-| **Data artifacts** | A cleaned CSV extract and a company/year ranking extract |
+## Dataset profile
+
+The repository extract covers reported layoffs from **11 March 2020 to 2 March 2023**.
+
+| Data-quality measure | Verified value |
+|---|---:|
+| Rows in committed CSV extract | **3,984** |
+| Repeated business-key rows detected | **1,992** |
+| Distinct records after deduplication | **1,992** |
+| Date coverage | **2020-03-11 – 2023-03-02** |
+| Source fields | 9 |
+
+<text></text>
+
+**Important data note:** the file is named `layoffs-cleaned.csv`, but the committed extract contains every business-key record twice. The import script treats it as the available source snapshot; the cleaning workflow detects and removes the repeated records before analysis. This is documented rather than hidden behind the filename.
+
+The source fields are company, location, industry, total layoffs, layoff percentage, date, funding stage, country, and funds raised (millions).
 
 ## Analytical workflow
 
-The SQL scripts are organized as a preparation stage followed by exploratory analysis.
-
 ```mermaid
 flowchart LR
-    A["Source SQL table<br/>layoffs"] --> B["Create staging copy"]
-    B --> C["Detect and remove duplicates"]
-    C --> D["Standardize values and dates"]
-    D --> E["Review incomplete records"]
-    E --> F["Clean staging table<br/>layoffs_staging2"]
-    F --> G["Exploratory SQL analysis"]
-    G --> H["Trend, comparison and ranking outputs"]
-    H --> I["CSV analysis extracts"]
+    A["data/layoffs-cleaned.csv"] --> B["MySQL source import"]
+    B --> C["layoffs_source"]
+    C --> D["Working staging table"]
+    D --> E["Normalize text and dates"]
+    E --> F["Resolve safe industry values"]
+    F --> G["ROW_NUMBER deduplication"]
+    G --> H["layoffs_staging2"]
+    H --> I["Exploratory SQL"]
+    I --> J["Company / industry / country"]
+    I --> K["Monthly and rolling trends"]
+    I --> L["Annual company rankings"]
+    L --> M["layoffs-EDA.csv"]
 ```
 
-### Analysis map
+### Data preparation
 
-The exploratory queries investigate several complementary views of the same dataset.
+The cleaning pipeline is designed to be rerun without changing the imported source table.
 
-```mermaid
-flowchart TB
-    A["Cleaned staging table"] --> B["Company analysis"]
-    A --> C["Country analysis"]
-    A --> D["Funding-stage analysis"]
-    A --> E["Time-series analysis"]
+1. **Import:** load the committed CSV snapshot into a typed MySQL source table.
+2. **Staging:** copy the source into a working table before transformations.
+3. **Standardization:** trim text values, normalize empty strings to `NULL`, parse dates, and harmonize the two observed cryptocurrency industry labels.
+4. **Industry inference:** fill an unknown industry only when the company's non-null records agree on exactly one industry. Conflicting or unresolved values are preserved for review.
+5. **Deduplication:** use `ROW_NUMBER()` over company, location, industry, layoff count, layoff percentage, and date. Secondary fields provide a deterministic tie-break order.
+6. **Analytical eligibility:** exclude a record only when both layoff measures are missing. A record with either measure available is retained.
 
-    B --> B1["Total layoffs by company"]
-    B --> B2["Top companies per year"]
-    C --> C1["Total layoffs by country"]
-    D --> D1["Total layoffs by funding stage"]
-    E --> E1["Monthly layoffs"]
-    E --> E2["Cumulative rolling total"]
-```
+The cleaning script does **not** assign blank industries to Crypto, use broad city-name wildcards, delete selected companies by name, or turn off SQL safe-update mode.
 
-## Data preparation
+### Exploratory analysis
 
-The cleaning script works with a MySQL table named `layoffs` and creates staging tables so that transformations can be performed without changing the initial source table.
+The EDA script covers:
 
-The preparation workflow includes:
+- Total layoffs by company.
+- Country, industry, and funding-stage comparisons.
+- Records reporting a 100% layoff rate.
+- Annual and monthly layoff trends.
+- Monthly cumulative rolling totals using a window function.
+- Average reported layoff percentage by company.
+- Top five companies per year using `DENSE_RANK()`, preserving ties.
 
-1. **Staging:** create a copy of the source table for cleaning.
-2. **Duplicate review:** use `ROW_NUMBER()` with business-field partitions to identify duplicate records.
-3. **Standardization:** trim company names and normalize selected location and country values.
-4. **Date handling:** parse date strings with `STR_TO_DATE()` and convert the staging column to a date type.
-5. **Missing-value review:** inspect incomplete records and remove rows where both layoff measures are missing.
+## Annual ranking snapshot
 
-> **Reproducibility note:** The original source file/database dump is not included. Load the source data into a MySQL table named `layoffs` before using the cleaning script. It also contains dataset-specific correction statements; review and validate the SQL in your own MySQL environment before running the script end-to-end. In particular, the missing-industry join/update block needs completion.
-
-## Exploratory analysis
-
-The EDA script uses aggregation, common table expressions (CTEs), and window functions to investigate:
-
-- **Company impact:** total reported layoffs by company.
-- **Geographic distribution:** reported layoffs by country.
-- **Funding stage:** total layoffs grouped by funding stage.
-- **Time trends:** monthly layoffs and cumulative rolling totals.
-- **Annual ranking:** the top companies by layoffs for each year, using `DENSE_RANK()`.
-- **Full workforce reductions:** records where the reported layoff percentage is 100%.
-
-### Annual ranking snapshot
-
-The committed `layoffs-EDA.csv` extract contains the leading company by reported layoffs in each year shown below.
+The committed `data/layoffs-EDA.csv` file contains annual company rankings. The leading company shown for each year is:
 
 | Year | Top-ranked company | Reported layoffs |
 |---:|---|---:|
@@ -107,7 +101,7 @@ The committed `layoffs-EDA.csv` extract contains the leading company by reported
 | 2022 | Meta | 22,000 |
 | 2023 | Google | 24,000 |
 
-*These figures come from the repository's annual company-ranking extract. They are company-level ranking values, not total layoffs across the entire year. The extract retains ties at the fifth rank, so some years contain more than five rows.*
+*These are the top company-level values from the ranking extract, not total layoffs for the whole year. The SQL uses `DENSE_RANK()`, so tied companies can cause more than five rows to appear for a year.*
 
 ## Repository structure
 
@@ -117,53 +111,90 @@ global-layoffs-analysis/
 │   ├── layoffs-cleaned.csv
 │   └── layoffs-EDA.csv
 ├── sql/
+│   ├── 00_Load_Source_Data.sql
 │   ├── Data Cleaning.sql
 │   └── Exploratory Data Analysis.sql
 ├── LICENSE
 └── README.md
 ```
 
-| Asset | Description |
+| File | Purpose |
 |---|---|
-| [`data/layoffs-cleaned.csv`](data/layoffs-cleaned.csv) | Prepared dataset extract with company, location, industry, layoff measures, date, funding stage, country, and funds raised |
-| [`data/layoffs-EDA.csv`](data/layoffs-EDA.csv) | Annual company ranking output with company, year, total layoffs, and rank |
-| [`sql/Data Cleaning.sql`](sql/Data%20Cleaning.sql) | Staging, duplicate handling, standardization, date conversion, and missing-value checks |
-| [`sql/Exploratory Data Analysis.sql`](sql/Exploratory%20Data%20Analysis.sql) | Aggregation, time-series analysis, rolling totals, and annual rankings |
+| [`sql/00_Load_Source_Data.sql`](sql/00_Load_Source_Data.sql) | Creates the MySQL source table and imports the supplied CSV |
+| [`sql/Data Cleaning.sql`](sql/Data%20Cleaning.sql) | Builds staging tables, standardizes values, safely infers missing industry labels, and deduplicates |
+| [`sql/Exploratory Data Analysis.sql`](sql/Exploratory%20Data%20Analysis.sql) | Aggregations, time-series analysis, rolling totals, and annual company rankings |
+| [`data/layoffs-cleaned.csv`](data/layoffs-cleaned.csv) | The CSV snapshot used as the import source |
+| [`data/layoffs-EDA.csv`](data/layoffs-EDA.csv) | Annual company-ranking output |
+| [`LICENSE`](LICENSE) | MIT license |
+
+## Run the project
+
+**Requirements:** MySQL 8.0 or later, with the `LOCAL INFILE` capability enabled in the MySQL client and server.
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/Sohila-Khaled-Abbas/global-layoffs-analysis.git
+   cd global-layoffs-analysis
+   ```
+
+2. Open `sql/00_Load_Source_Data.sql` and replace the placeholder path with the absolute path to your local `data/layoffs-cleaned.csv` file. Use forward slashes in the path on Windows.
+
+3. Confirm `local_infile` is enabled. The import script begins with:
+
+   ```sql
+   SHOW VARIABLES LIKE 'local_infile';
+   ```
+
+   If `LOCAL INFILE` is disabled, enable the option for your MySQL client and server before running the import.
+
+4. Execute the scripts in this order from MySQL Workbench or a MySQL client:
+
+   | Order | Script | Result |
+   |---:|---|---|
+   | 1 | `00_Load_Source_Data.sql` | `layoffs_source` |
+   | 2 | `Data Cleaning.sql` | `layoffs_staging2` |
+   | 3 | `Exploratory Data Analysis.sql` | Analytical query results |
+
+5. Review the data-quality checks at the end of the cleaning script. Then run the EDA queries against `layoffs_staging2`.
+
+**Re-running:** the import script drops and recreates only `layoffs_source`. The cleaning script recreates its derived staging tables and leaves the source table untouched. Do not run the import step against a source table containing work you need to preserve.
 
 ## SQL techniques demonstrated
 
-| Technique | How it is used |
+| Technique | Application |
 |---|---|
-| `CREATE TABLE ... LIKE` | Build staging tables based on the source structure |
-| `ROW_NUMBER() OVER (...)` | Identify duplicate records |
-| CTEs (`WITH`) | Structure multi-step analysis queries |
-| `TRIM()` and string functions | Standardize text values |
-| `STR_TO_DATE()` | Convert text dates into SQL dates |
-| `GROUP BY` and aggregate functions | Compare layoffs across business dimensions |
+| `CREATE TABLE ... LIKE` | Create a working copy of the imported source schema |
+| `LOAD DATA LOCAL INFILE` | Load the provided CSV extract into MySQL |
+| `NULLIF()`, `TRIM()`, `STR_TO_DATE()` | Normalize text, nulls, and date values |
+| `ROW_NUMBER() OVER (...)` | Identify repeated business records |
+| `GROUP BY` and `HAVING` | Build a company-to-industry lookup only where the mapping is unambiguous |
+| CTEs (`WITH`) | Structure multi-stage analytical queries |
 | `SUM() OVER (...)` | Calculate cumulative monthly totals |
-| `DENSE_RANK()` | Rank companies within each year |
+| `AVG()` | Summarize reported layoff percentages without adding percentages together |
+| `DENSE_RANK()` | Rank companies within each year while preserving ties |
+
+## Scope and limitations
+
+- The repository contains a CSV snapshot and SQL scripts; it does not include a live data ingestion service or automatic refresh pipeline.
+- The CSV's filename is retained for compatibility, but the extract contains repeated business-key records that are removed by the cleaning process.
+- The project is a SQL analytics case study. It does not currently include a Power BI or Tableau dashboard.
+- Industry inference is deliberately conservative: ambiguous company-to-industry mappings remain unresolved instead of being assigned arbitrarily.
 
 ## Explore the project
 
-- **[View the SQL data-cleaning script](sql/Data%20Cleaning.sql)**
-- **[View the exploratory analysis script](sql/Exploratory%20Data%20Analysis.sql)**
-- **[Browse the prepared data](data/)**
+- **[Data import script](sql/00_Load_Source_Data.sql)**
+- **[Data cleaning script](sql/Data%20Cleaning.sql)**
+- **[Exploratory analysis script](sql/Exploratory%20Data%20Analysis.sql)**
+- **[Browse the datasets](data/)**
 - **[View the project in my portfolio](https://sohila-khaled-abbas.vercel.app/work/)**
-
-## Scope and possible extensions
-
-The current repository focuses on SQL-based data preparation and exploratory analysis. It does not currently include the original raw-data download, an automated refresh pipeline, or a Power BI/Tableau dashboard.
-
-Potential next steps include adding a reproducible database setup, strengthening data-quality validation, and building an interactive dashboard on top of the prepared dataset.
-
----
 
 ## About
 
 **Sohila Khaled Abbas**  
 Data Analyst · BI Developer · Analytics Engineer
 
-I build analytical solutions that connect data preparation, SQL, and business-focused insights.
+I build analytical solutions that connect reliable data preparation, SQL, and business-focused insights.
 
 [Portfolio](https://sohila-khaled-abbas.vercel.app/work/) · [GitHub](https://github.com/Sohila-Khaled-Abbas) · [LinkedIn](https://www.linkedin.com/in/sohilakabbas/)
 
