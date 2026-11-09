@@ -8,7 +8,8 @@
 DROP TABLE IF EXISTS
     layoffs_staging2,
     layoffs_staging_normalized,
-    layoffs_staging;
+    layoffs_staging,
+    company_industry_lookup;
 
 -- 1. Preserve the imported source in a working staging table.
 CREATE TABLE layoffs_staging LIKE layoffs_source;
@@ -53,19 +54,24 @@ WHERE country IS NOT NULL;
 -- 4. Fill an unknown company industry only when every known record for that
 --    company agrees on exactly one non-null industry. Conflicting companies
 --    remain NULL for review instead of receiving an arbitrary value.
+DROP TABLE IF EXISTS company_industry_lookup;
+
+CREATE TABLE company_industry_lookup AS
+SELECT
+    company,
+    MIN(industry) AS resolved_industry
+FROM layoffs_staging_normalized
+WHERE industry IS NOT NULL
+GROUP BY company
+HAVING COUNT(DISTINCT industry) = 1;
+
 UPDATE layoffs_staging_normalized AS target
-JOIN (
-    SELECT
-        company,
-        MIN(industry) AS resolved_industry
-    FROM layoffs_staging_normalized
-    WHERE industry IS NOT NULL
-    GROUP BY company
-    HAVING COUNT(DISTINCT industry) = 1
-) AS resolved
+JOIN company_industry_lookup AS resolved
     ON resolved.company = target.company
 SET target.industry = resolved.resolved_industry
 WHERE target.industry IS NULL;
+
+DROP TABLE company_industry_lookup;
 
 -- 5. Remove repeated business records using the same identifying fields
 --    throughout the project. When duplicates differ in secondary metadata,
