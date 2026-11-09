@@ -41,7 +41,6 @@ The repository extract covers reported layoffs from **11 March 2020 to 2 March 2
 | Date coverage | **2020-03-11 – 2023-03-02** |
 | Source fields | 9 |
 
-<text></text>
 
 **Important data note:** the file is named `layoffs-cleaned.csv`, but the committed extract contains every business-key record twice. The import script treats it as the available source snapshot; the cleaning workflow detects and removes the repeated records before analysis. This is documented rather than hidden behind the filename.
 
